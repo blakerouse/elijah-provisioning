@@ -42,6 +42,7 @@ if [ ! -r $SECRET_FILE ]; then
 fi
 
 VID=$1
+TENANT_NETWORK_ID=${TENANT_NETWORK_ID:-$VID}
 CLOUDLET_VPN_PORT_OFFSET=${CLOUDLET_VPN_PORT_OFFSET:-2000}
 VPN_PORT=$(($CLOUDLET_VPN_PORT_OFFSET+$VID))
 OUTSIDE_IP=${OUTSIDE_IP:-$(./cloudlet-net--get-default-source-ip)}
@@ -50,11 +51,11 @@ if [ "$MODE" = "client" ]; then
     # Configuration specific to the client.
     echo "remote $OUTSIDE_IP"
     echo "ifconfig 100.65.$VID.5 100.65.$VID.4"
-    echo "route 100.64.$VID.0 255.255.255.0"
+    echo "route 100.64.$TENANT_NETWORK_ID.0 255.255.255.0"
 else
     # Configuration specific to the server.
     echo "ifconfig 100.65.$VID.4 100.65.$VID.5"
-    echo "push \"route 100.64.$VID.0 255.255.255.0\""
+    echo "push \"route 100.64.$TENANT_NETWORK_ID.0 255.255.255.0\""
     echo "writepid $VPN_STATE_DIR/tenant$VID.pid"
     echo "log-append $VPN_STATE_DIR/tenant$VID.log"
     echo "user nobody"

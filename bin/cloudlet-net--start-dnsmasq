@@ -21,6 +21,8 @@ fi
 
 VID=$1
 
+TENANT_NETWORK_ID=${TENANT_NETWORK_ID:-$VID}
+
 STATE_DIR="/var/lib/cloudlet/dnsmasq"
 PID_FILE=$STATE_DIR/dnsmasq-vlan-$VID.pid
 
@@ -38,11 +40,11 @@ ip netns exec tenant$VID dnsmasq \
     --pid-file=$PID_FILE \
     --dhcp-authoritative \
     --interface=veth$VID \
-    --dhcp-range=100.64.$VID.10,100.64.$VID.199 \
-    --listen-address=100.64.$VID.1 \
+    --dhcp-range=100.64.$TENANT_NETWORK_ID.10,100.64.$TENANT_NETWORK_ID.199 \
+    --listen-address=100.64.$TENANT_NETWORK_ID.1 \
     --dhcp-leasefile=$STATE_DIR/vlan-$VID.leases \
     --except-interface=lo \
-    --dhcp-option=3,100.64.$VID.1 \
+    --dhcp-option=3,100.64.$TENANT_NETWORK_ID.1 \
     --dhcp-option=6,8.8.8.8 \
     --bind-dynamic
 
