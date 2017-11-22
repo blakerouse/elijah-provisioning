@@ -1,8 +1,10 @@
 
+import json
 import os
 import random
 import threading
 import time
+import urllib
 import urllib2
 from collections import defaultdict
 from subprocess import Popen, CalledProcessError
@@ -74,7 +76,7 @@ def get_all_networks():
 
 
 @synchronized(network_lock)
-def atomic_network_allocate(user_id):
+def atomic_network_allocate(user_id, migration=None):
     """Reserve a free network for `user_id`."""
     used_networks = [
         network['network']
@@ -92,10 +94,13 @@ def atomic_network_allocate(user_id):
     selected_network = available_networks[0]
     app.logger.info(
         "selected new network '%s' for user '%s'", selected_network, user_id)
-    get_app_state()[user_id] = {
+    data = {
         'network': selected_network,
         'apps': {},
     }
+    if migration:
+        data['migration'] = migration
+    get_app_state()[user_id] = data
     return get_app_state()[user_id]
 
 
@@ -116,11 +121,11 @@ def atomic_network_release(user_id, app_id):
         del get_app_state()[user_id]
 
 
-def get_user_network(user_id, create=False):
+def get_user_network(user_id, create=False, migration=None):
     """Return the tenant network for the user to use."""
     network = get_app_state().get(user_id)
     if network is None and create:
-        return atomic_network_allocate(user_id)
+        return atomic_network_allocate(user_id, migration=migration)
     return network
 
 
@@ -165,7 +170,7 @@ def start_network(network):
     """Start the networking for the network."""
     started = network.get('open', False)
     if started:
-        return
+        return False
     app.logger.info("starting network '%s'", network['network'])
     config = app.config['CLOUDLET_CONFIG']
     net_info = config['networks'][network['network']]
@@ -176,12 +181,17 @@ def start_network(network):
         env['OUTSIDE_IP'] = external_ip
     if port_offset:
         env['CLOUDLET_VPN_PORT_OFFSET'] = port_offset
+    migration = network.get('migration')
+    if migration:
+        write_leases(network['network'], migration['leases'])
+        env['TENANT_NETWORK_ID'] = migration['vid']
     process = Popen(
         ['cloudlet-add-vlan', net_info['interface'], str(net_info['vid'])],
         env=env)
     if process.wait() != 0:
         raise CalledProcessError(process.returncode, 'cloudlet-add-vlan')
     network['open'] = True
+    return True
 
 
 @synchronized(network_lock)
@@ -239,6 +249,26 @@ def wait_for_ip(network, mac):
     return None
 
 
+def write_leases(network, leases):
+    """Write the entire leases file."""
+    config = app.config['CLOUDLET_CONFIG']
+    net_info = config['networks'][network]
+    leases_path = os.path.join(
+        '/var/lib/cloudlet/dnsmasq/vlan-%d.leases' % net_info['vid'])
+    with open(leases_path, 'w') as stream:
+        stream.write(leases)
+
+
+def dump_leases(network):
+    """Dump the entire leases file."""
+    config = app.config['CLOUDLET_CONFIG']
+    net_info = config['networks'][network]
+    leases_path = os.path.join(
+        '/var/lib/cloudlet/dnsmasq/vlan-%d.leases' % net_info['vid'])
+    with open(leases_path, 'r') as stream:
+        return stream.read()
+
+
 def get_vpn_client_config(network):
     """Get the VPN client configuration for `network`."""
     config = app.config['CLOUDLET_CONFIG']
@@ -255,8 +285,33 @@ def index():
     user_id = request.values.get("user_id")
     app_id = request.values.get("app_id")
     if request.method == 'POST':
+        migrate = request.values.get("migrate")
+        migrate_network_info = None
+        if migrate:
+            migrate = urllib.unquote(migrate)
+            if migrate.endswith('/'):
+                migrate += 'migrate'
+            else:
+                migrate += '/migrate'
+            migrate_response = urllib2.urlopen(migrate)
+            if migrate_response.getcode() != 200:
+                app.logger.error(
+                    "failed to request migration information from "
+                    "'%s' for app '%s' user '%s'",
+                    migrate, app_id, user_id)
+                abort(400)
+            migrate_response = json.loads(migrate_response)
+            migrate_network_info = migrate_response.get('network', {})
+            if ('vid' not in migrate_network_info or
+                    'leases' not in migrate_network_info):
+                app.logger.error(
+                    "invalid migration information from "
+                    "'%s' for app '%s' user '%s'",
+                    migrate, app_id, user_id)
+                abort(400)
         try:
-            network = get_user_network(user_id, create=True)
+            network = get_user_network(
+                user_id, create=True, migration=migrate_network_info)
         except OutOfNetworksError:
             abort(400)
         user_app = network['apps'].get(app_id)
@@ -291,7 +346,14 @@ def index():
                     stream.write(chunk)
         else:
             abort(400)
-        start_network(network)
+        net_started = start_network(network)
+        if not net_started and migrate_network_info:
+            app.logger.info(
+                "failed migrating app '%s' for user '%s' because user already "
+                "has a network assigned that will not match the required "
+                "migration information for the migrating application"
+                app_id, user_id)
+            abort(400)
         interface_mac = random_mac()
         app.logger.info(
             "starting app '%s' for user '%s' on cloudlet server '%s' "
@@ -350,6 +412,28 @@ def index():
             'ip': user_app['ip'],
             'vpn': get_vpn_client_config(network['network']),
         })
+
+
+@app.route('/migrate', methods=['GET'])
+def migrate():
+    """
+    Endpoint that is called by another gateway to get the required information
+    to perform the migrations.
+    """
+    user_id = request.values.get("user_id")
+    app_id = request.values.get("app_id")
+    network, user_app = get_network_and_app(user_id, app_id)
+    vid = network['vid']
+    if 'migration' in network:
+        # The network was migrated to this cloudlet, so return VID the VM
+        # is assigned in this VLAN.
+        vid = network['migration']['vid']
+    return jsonify({
+        'network': {
+            'vid': vid,
+            'leases': dump_leases(network['network']),
+        }
+    })
 
 
 def run_server(
