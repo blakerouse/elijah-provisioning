@@ -735,7 +735,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
                 self.wfile.write(stream.read(read_size))
                 self.wfile.flush()
         os.unlink(residue_path)
-        os.unlink(os.path.dirname(residue_path))
+        os.rmdir(os.path.dirname(residue_path))
 
     def _check_url_validity(self, message):
         requested_base = None
