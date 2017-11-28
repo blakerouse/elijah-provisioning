@@ -61,7 +61,7 @@ class SessionResource(object):
     OVERLAY_PIPE    = "overlay_pipe"
     OVERLAY_DIR     = "overlay_dir"
     OVERLAY_DB_ENTRY    = "overlay_db_entry"
-    META_INFO = "meta_info"
+    BASE_PATH = "base_path"
 
     def __init__(self, session_id):
         self.session_id = session_id
@@ -73,7 +73,7 @@ class SessionResource(object):
         self.resource_list.append(SessionResource.OVERLAY_PIPE)
         self.resource_list.append(SessionResource.OVERLAY_DIR)
         self.resource_list.append(SessionResource.OVERLAY_DB_ENTRY)
-        self.resource_list.append(SessionResource.META_INFO)
+        self.resource_list.append(SessionResource.BASE_PATH)
 
     def add(self, name, obj):
         if name not in self.resource_list:
@@ -115,10 +115,12 @@ class SessionResource(object):
             overlay_db_entry.terminate()
 
     def handoff(self):
-        meta_info = self.resource_dict[SessionResource.META_INFO]
-        print("META_INFO")
+        base_path = self.resource_dict[SessionResource.BASE_PATH]
+        (base_diskmeta, base_mem, base_memmeta) = \
+                Cloudlet_Const.get_basepath(base_path, check_exist=True)
+        print("HANDOFF")
         import pprint
-        pprint.pprint(meta_info)
+        pprint.pprint((base_diskmeta, base_mem, base_memmeta))
 
 
 def wrap_process_fault(function):
@@ -617,7 +619,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_PIPE, self.overlay_pipe)
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
-        s_resource.add(SessionResource.META_INFO, meta_info)
+        s_resource.add(SessionResource.BASE_PATH, base_path)
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
@@ -839,7 +841,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_PIPE, self.overlay_pipe)
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
-        s_resource.add(SessionResource.META_INFO, meta_info)
+        s_resource.add(SessionResource.BASE_PATH, base_path)
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
