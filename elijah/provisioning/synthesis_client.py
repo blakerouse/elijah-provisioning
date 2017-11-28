@@ -456,8 +456,14 @@ class Client(object):
         command = message.get(Protocol.KEY_COMMAND)
         if command != Protocol.MESSAGE_COMMAND_SUCCESS:
             raise ClientError("finish success error: %d" % command)
+        sock.close()
 
         # get the path to the residue on the server
+        sock = Client.connect(self.ip, self.port)
+        if not sock:
+            msg = "Cannot connect to Cloudlet (%s:%d)\n" % (self.ip, self.port)
+            sys.stderr.write(msg)
+            raise ClientError(msg)
         residue_path = message.get(Protocol.KEY_RESIDUE_PATH)
         residue_request = {
             Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RESIDUE,
@@ -480,6 +486,7 @@ class Client(object):
                 read_size = remaining_size
             remaining_size -= read_size
             stream.write(Client.recv_all(sock, read_size))
+        sock.close()
 
         # close session
         if Client.disassociate(self.ip, self.port, self.session_id) is False:
