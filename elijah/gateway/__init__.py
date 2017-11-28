@@ -508,7 +508,7 @@ def migrate():
 
 
 @app.route('/migrate/residue', methods=['GET'])
-def migrate():
+def migrate_residue():
     """
     Endpoint that is called by another gateway to get the residue from the
     migration.
