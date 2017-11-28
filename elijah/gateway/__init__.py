@@ -2,6 +2,7 @@
 import json
 import os
 import random
+import tempfile
 import threading
 import time
 import urllib
@@ -10,7 +11,7 @@ from collections import defaultdict
 from subprocess import Popen, CalledProcessError
 
 import yaml
-from flask import Flask, abort, jsonify, make_response, request
+from flask import Flask, abort, jsonify, make_response, request, Response
 from elijah.gateway.lease_parser import Leases
 from elijah.provisioning.synthesis_client import Client, Protocol
 
@@ -280,6 +281,39 @@ def get_vpn_client_config(network):
         return stream.read()
 
 
+def start_migration(user_app):
+    """Start the migration of the user application."""
+    def _run():
+        client = user_app['client']
+        tmpdir = tempfile.mkdtemp()
+        residue_path = os.path.join(tmpdir, 'residue.zip')
+        user_app['migrate_path'] = residue_path
+        with open(residue_path, 'wb') as stream:
+            client.handoff(stream)
+
+    thread = threading.Thread(target=_run)
+    thread.start()
+    user_app['migrate_thread'] = thread
+
+
+def wait_for_migration(migrate):
+    """Wait for the migration to be complete so the residue can be pulled."""
+    while True:
+        migrate_response = urllib2.urlopen(migrate)
+        if migrate_response.getcode() != 200:
+            app.logger.error(
+                "failed to request migration information from "
+                "'%s' for app '%s' user '%s'",
+                migrate, app_id, user_id)
+            abort(400)
+        migrate_response = json.loads(migrate_response)
+        migrate_status = migrate_response.get('migrate', 'inprogress')
+        if migrate_status == 'complete':
+            break
+        else:
+            time.sleep(1)
+
+
 @app.route('/', methods=['GET', 'POST', 'DELETE'])
 def index():
     """Endpoint to get app information and to start a new application."""
@@ -288,6 +322,7 @@ def index():
     if request.method == 'POST':
         migrate = request.values.get("migrate")
         migrate_network_info = None
+        migrate_app_info = None
         if migrate:
             migrate = urllib.unquote(migrate)
             if migrate.endswith('/'):
@@ -303,8 +338,11 @@ def index():
                 abort(400)
             migrate_response = json.loads(migrate_response)
             migrate_network_info = migrate_response.get('network', {})
+            migrate_app_info = migrate_response.get('app', {})
             if ('vid' not in migrate_network_info or
-                    'leases' not in migrate_network_info):
+                    'leases' not in migrate_network_info or
+                    'ip' not in migrate_app_info or
+                    'mac' not in migrate_app_info):
                 app.logger.error(
                     "invalid migration information from "
                     "'%s' for app '%s' user '%s'",
@@ -329,11 +367,23 @@ def index():
                 "failed to select a cloudlet server to run app '%s' "
                 "for user '%s'", app_id, user_id)
             abort(400)
+        # If this is a migration we need to wait until the migration is ready
+        # to get the residue from the other gateway.
+        if migrate is not None:
+            wait_for_migration(migrate)
         # Determine if a file was provided on the request to create.
         overlay_path = os.path.join(
             app.config['OVERLAYS_PATH'], '%s_%s.overlay' % (
                 user_id, app_id))
-        if request.files.get('overlay'):
+        if migrate is not None:
+            overlay_response = urllib2.urlopen(migrate + '/residue')
+            with open(overlay_path, 'wb') as stream:
+                while True:
+                    chunk = overlay_response.read(16 * 1024)
+                    if not chunk:
+                        break
+                    stream.write(chunk)
+        elif request.files.get('overlay'):
             overlay_file = request.files.get('overlay')
             overlay_file.save(overlay_path)
         elif request.values.get('overlay'):
@@ -355,7 +405,10 @@ def index():
                 "migration information for the migrating application"
                 app_id, user_id)
             abort(400)
-        interface_mac = random_mac()
+        if migrate_app_info:
+            interface_mac = migrate_app_info['mac']
+        else:
+            interface_mac = random_mac()
         app.logger.info(
             "starting app '%s' for user '%s' on cloudlet server '%s' "
             "connected to network '%s' with MAC '%s'",
@@ -374,7 +427,10 @@ def index():
             "connected to network '%s' with MAC '%s' to get an IP address",
             app_id, user_id, selected_cloudlet['name'], network['network'],
             interface_mac)
-        vm_ip = wait_for_ip(network['network'], interface_mac)
+        if migrate_app_info:
+            vm_ip = migrate_app_info['ip']
+        else:
+            vm_ip = wait_for_ip(network['network'], interface_mac)
         if not vm_ip:
             # Never got an IP address, so lets stop the client.
             app.logger.error(
@@ -418,8 +474,8 @@ def index():
 @app.route('/migrate', methods=['GET'])
 def migrate():
     """
-    Endpoint that is called by another gateway to get the required information
-    to perform the migrations.
+    Endpoint that is called by another gateway to start the migration on this
+    gateway.
     """
     user_id = request.values.get("user_id")
     app_id = request.values.get("app_id")
@@ -429,12 +485,53 @@ def migrate():
         # The network was migrated to this cloudlet, so return VID the VM
         # is assigned in this VLAN.
         vid = network['migration']['vid']
+    # See if migration has already started.
+    migrate = 'inprogress'
+    thread = user_app.get('migrate_thread', None)
+    if thread:
+        if not thread.isAlive():
+            migrate = 'complete'
+    else:
+        # Start the migration.
+        start_migration(user_app)
     return jsonify({
         'network': {
             'vid': vid,
             'leases': dump_leases(network['network']),
-        }
+        },
+        'app': {
+            'mac': user_app['mac'],
+            'ip': user_app['ip'],
+        },
+        'migrate': migrate,
     })
+
+
+@app.route('/migrate/residue', methods=['GET'])
+def migrate():
+    """
+    Endpoint that is called by another gateway to get the residue from the
+    migration.
+    """
+    user_id = request.values.get("user_id")
+    app_id = request.values.get("app_id")
+    network, user_app = get_network_and_app(user_id, app_id)
+    thread = user_app.get('migrate_thread', None)
+    if not thread or thread.isAlive():
+        abort(400)
+    residue_path = user_app['migrate_path']
+    if not os.path.exists(residue_path):
+        abort(400)
+    def chunk_response():
+        with open(residue_path, 'wb') as stream:
+            while True:
+                buf = stream.read(4096)
+                if not buf:
+                    os.unlink(residue_path)
+                    os.rmdir(os.path.dirname(residue_path))
+                    break
+                yield buf
+    return Response(chunk_response(), mimetype='application/octet-stream')
 
 
 def run_server(
