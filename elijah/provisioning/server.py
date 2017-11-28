@@ -61,6 +61,7 @@ class SessionResource(object):
     OVERLAY_PIPE    = "overlay_pipe"
     OVERLAY_DIR     = "overlay_dir"
     OVERLAY_DB_ENTRY    = "overlay_db_entry"
+    META_INFO = "meta_info"
 
     def __init__(self, session_id):
         self.session_id = session_id
@@ -72,6 +73,7 @@ class SessionResource(object):
         self.resource_list.append(SessionResource.OVERLAY_PIPE)
         self.resource_list.append(SessionResource.OVERLAY_DIR)
         self.resource_list.append(SessionResource.OVERLAY_DB_ENTRY)
+        self.resource_list.append(SessionResource.META_INFO)
 
     def add(self, name, obj):
         if name not in self.resource_list:
@@ -112,6 +114,9 @@ class SessionResource(object):
         if overlay_db_entry:
             overlay_db_entry.terminate()
 
+    def handoff(self):
+        meta_info = self.resource_dict[SessionResource.META_INFO]
+        print(meta_info)
 
 
 def wrap_process_fault(function):
@@ -610,6 +615,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_PIPE, self.overlay_pipe)
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
+        s_resource.add(SessionResource.META_INFO, meta_info)
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
@@ -636,6 +642,28 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             LOG.info(msg)
             session_resource.deallocate()
             del session_resources[session_id]
+
+        LOG.info("  - %s" % str(pformat(message)))
+        self.ret_success(Protocol.MESSAGE_COMMAND_FINISH)
+
+    def _handle_handoff(self, message):
+        global session_resources
+
+        session_id = message.get(Protocol.KEY_SESSION_ID, None)
+        session_resource = session_resources.get(session_id)
+        if session_resource is None:
+            # No saved resource for the session
+            msg = "No resource to be handoff found at Session (%s)" % (
+                session_id)
+            LOG.warning(msg)
+            self.ret_fail(msg)
+            return
+
+        # handoff all the session resource
+        msg = "Handoff resources for the Session (%s)" % session_id
+        LOG.info(msg)
+        session_resource.handoff()
+        del session_resources[session_id]
 
         LOG.info("  - %s" % str(pformat(message)))
         self.ret_success(Protocol.MESSAGE_COMMAND_FINISH)
@@ -809,6 +837,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_PIPE, self.overlay_pipe)
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
+        s_resource.add(SessionResource.META_INFO, meta_info)
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
@@ -909,6 +938,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             elif command == Protocol.MESSAGE_COMMAND_FINISH:
                 if self._check_session(message):
                     self._handle_finish(message)
+            elif command == Protocol.MESSAGE_COMMAND_HANDOFF:
+                if self._check_session(message):
+                    self._handle_handoff(message)
             elif command == Protocol.MESSAGE_COMMAND_SEND_OVERLAY_URL:
                 # VM provisioning with given OVERLAY URL
                 if self._check_session(message):
