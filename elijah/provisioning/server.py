@@ -30,6 +30,7 @@ import struct
 import shutil
 import threading
 
+import handoff as handoff
 import synthesis as synthesis
 from package import VMOverlayPackage
 from db.api import DBConnector
@@ -62,6 +63,7 @@ class SessionResource(object):
     OVERLAY_DIR     = "overlay_dir"
     OVERLAY_DB_ENTRY    = "overlay_db_entry"
     BASE_PATH = "base_path"
+    BASE_HASH = "base_path"
 
     def __init__(self, session_id):
         self.session_id = session_id
@@ -74,6 +76,7 @@ class SessionResource(object):
         self.resource_list.append(SessionResource.OVERLAY_DIR)
         self.resource_list.append(SessionResource.OVERLAY_DB_ENTRY)
         self.resource_list.append(SessionResource.BASE_PATH)
+        self.resource_list.append(SessionResource.BASE_HASH)
 
     def add(self, name, obj):
         if name not in self.resource_list:
@@ -115,12 +118,49 @@ class SessionResource(object):
             overlay_db_entry.terminate()
 
     def handoff(self):
+        resumed_vm = self.resource_dict.get(SessionResource.RESUMED_VM, None)
+        fuse = self.resource_dict.get(SessionResource.FUSE, None)
         base_path = self.resource_dict[SessionResource.BASE_PATH]
+        base_hash = self.resource_dict[SessionResource.BASE_HASH]
         (base_diskmeta, base_mem, base_memmeta) = \
                 Cloudlet_Const.get_basepath(base_path, check_exist=True)
-        print("HANDOFF")
-        import pprint
-        pprint.pprint((base_diskmeta, base_mem, base_memmeta))
+        base_vm_paths = [base_disk, base_mem, base_diskmeta, base_memmeta]
+
+        # Preload basevm hash dictionary for creating the residue.
+        preload_thread = handoff.PreloadResidueData(
+            base_diskmeta, base_memmeta)
+        preload_thread.start()
+        preload_thread.join()
+
+        # Set up temp file path for data structure and residue
+        temp_dir = mkdtemp(prefix="cloudlet-residue-")
+        residue_zipfile = os.path.join(temp_dir, Cloudlet_Const.OVERLAY_ZIP)
+        dest_handoff_url = "file://%s" % os.path.abspath(residue_zipfile)
+
+        options = Options()
+        options.TRIM_SUPPORT = True
+        options.FREE_SUPPORT = True
+        options.DISK_ONLY = False
+        handoff_ds = handoff.HandoffDataSend()
+        handoff_ds.save_data(
+            base_vm_paths, base_hash,
+            preload_thread.basedisk_hashdict,
+            preload_thread.basemem_hashdict,
+            options, dest_handoff_url, None,
+            fuse.mountpoint, resumed_vm.qemu_logfile,
+            resumed_vm.qmp_channel, resumed_vm.machine.ID(),
+            fuse.modified_disk_chunks, "qemu:///session",
+        )
+        handoff_ds._load_vm_data()
+        try:
+            handoff.perform_handoff(handoff_ds)
+        except handoff.HandoffError as e:
+            LOG.error("Cannot perform VM handoff: %s" % (str(e)))
+        else:
+            if residue_zipfile and os.path.exists(residue_zipfile):
+                LOG.info("Save VM handoff overlay at: %s" %
+                        (os.path.abspath(residue_zipfile)))
+            self.deallocate()
 
 
 def wrap_process_fault(function):
@@ -620,6 +660,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
         s_resource.add(SessionResource.BASE_PATH, base_path)
+        s_resource.add(
+            SessionResource.BASE_HASH,
+            meta_info.get(Cloudlet_Const.META_BASE_VM_SHA256))
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
@@ -842,6 +885,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
         s_resource.add(SessionResource.BASE_PATH, base_path)
+        s_resource.add(
+            SessionResource.BASE_HASH,
+            meta_info.get(Cloudlet_Const.META_BASE_VM_SHA256))
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
