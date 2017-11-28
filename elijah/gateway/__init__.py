@@ -307,7 +307,7 @@ def wait_for_migration(migrate, user_id, app_id):
                 "'%s' for app '%s' user '%s'",
                 migrate, app_id, user_id)
             abort(400)
-        migrate_response = json.loads(migrate_response)
+        migrate_response = json.loads(migrate_response.read())
         migrate_status = migrate_response.get('migrate', 'inprogress')
         if migrate_status == 'complete':
             break
@@ -342,7 +342,7 @@ def index():
                     "'%s' for app '%s' user '%s'",
                     migrate, app_id, user_id)
                 abort(400)
-            migrate_response = json.loads(migrate_response)
+            migrate_response = json.loads(migrate_response.read())
             migrate_network_info = migrate_response.get('network', {})
             migrate_app_info = migrate_response.get('app', {})
             if ('vid' not in migrate_network_info or
