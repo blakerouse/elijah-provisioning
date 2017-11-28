@@ -37,6 +37,7 @@ from db.api import DBConnector
 from db.table_def import BaseVM, Session, OverlayVM
 from synthesis_protocol import Protocol as Protocol
 from configuration import Const as Cloudlet_Const
+from configuration import Options
 from configuration import Synthesis_Const as Synthesis_Const
 import msgpack
 
