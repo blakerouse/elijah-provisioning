@@ -660,9 +660,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
         s_resource.add(SessionResource.BASE_PATH, base_path)
-        s_resource.add(
-            SessionResource.BASE_HASH,
-            meta_info.get(Cloudlet_Const.META_BASE_VM_SHA256))
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
@@ -702,7 +699,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             # No saved resource for the session
             msg = "No resource to be handoff found at Session (%s)" % (
                 session_id)
-            LOG.warning(msg)
             self.ret_fail(msg)
             return
 
@@ -885,9 +881,6 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
         s_resource.add(SessionResource.BASE_PATH, base_path)
-        s_resource.add(
-            SessionResource.BASE_HASH,
-            meta_info.get(Cloudlet_Const.META_BASE_VM_SHA256))
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
