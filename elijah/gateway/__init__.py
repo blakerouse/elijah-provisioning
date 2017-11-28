@@ -487,7 +487,9 @@ def migrate():
     user_id = request.values.get("user_id")
     app_id = request.values.get("app_id")
     network, user_app = get_network_and_app(user_id, app_id)
-    vid = network['vid']
+    config = app.config['CLOUDLET_CONFIG']
+    net_info = config['networks'][network['network']]
+    vid = net_info['vid']
     if 'migration' in network:
         # The network was migrated to this cloudlet, so return VID the VM
         # is assigned in this VLAN.
