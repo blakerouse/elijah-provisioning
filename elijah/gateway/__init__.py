@@ -179,15 +179,15 @@ def start_network(network):
     port_offset = config.get('vpn', {}).get('port_offset')
     env = os.environ.copy()
     if external_ip:
-        env['OUTSIDE_IP'] = external_ip
+        env['OUTSIDE_IP'] = str(external_ip)
     if port_offset:
-        env['CLOUDLET_VPN_PORT_OFFSET'] = port_offset
+        env['CLOUDLET_VPN_PORT_OFFSET'] = str(port_offset)
     migration = network.get('migration')
     if migration:
         write_leases(network['network'], migration['leases'])
-        env['TENANT_NETWORK_ID'] = migration['vid']
+        env['TENANT_NETWORK_ID'] = str(migration['vid'])
     process = Popen(
-        ['cloudlet-add-vlan', net_info['interface'], str(net_info['vid'])],
+        ['cloudlet-add-vlan', str(net_info['interface']), str(net_info['vid'])],
         env=env)
     if process.wait() != 0:
         raise CalledProcessError(process.returncode, 'cloudlet-add-vlan')
