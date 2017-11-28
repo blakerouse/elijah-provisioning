@@ -53,6 +53,7 @@ class Protocol(object):
     MESSAGE_COMMAND_SESSION_CREATE = 0x15
     MESSAGE_COMMAND_SESSION_CLOSE = 0x16
     MESSAGE_COMMAND_HANDOFF = 0x18
+    MESSAGE_COMMAND_RESIDUE = 0x19
     # server -> client as return
     MESSAGE_COMMAND_SUCCESS = 0x01
     MESSAGE_COMMAND_FAIELD = 0x02
@@ -72,6 +73,7 @@ class Protocol(object):
     KEY_SESSION_ID = "session_id"
     KEY_REQUESTED_COMMAND = "requested_command"
     KEY_OVERLAY_URL = "overlay_url"
+    KEY_RESIDUE_PATH = "residue_path"
 
     # synthesis option
     KEY_SYNTHESIS_OPTION = "synthesis_option"
@@ -411,7 +413,7 @@ class Client(object):
         if Client.disassociate(self.ip, self.port, self.session_id) is False:
             print "Failed to close session"
 
-    def handoff(self):
+    def handoff(self, stream):
         # printout measurement
         send_header_end = self.time_dict['send_header_end_time']
         synthesis_end = self.time_dict['synthesis_success_time']
@@ -454,6 +456,30 @@ class Client(object):
         command = message.get(Protocol.KEY_COMMAND)
         if command != Protocol.MESSAGE_COMMAND_SUCCESS:
             raise ClientError("finish success error: %d" % command)
+
+        # get the path to the residue on the server
+        residue_path = message.get(Protocol.KEY_RESIDUE_PATH)
+        residue_request = {
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RESIDUE,
+            Protocol.KEY_RESIDUE_PATH: residue_path,
+        }
+        header = Client.encoding(client_info)
+        sock.sendall(struct.pack("!I", len(header)))
+        sock.sendall(header)
+
+        # recv the size of the residue
+        data = Client.recv_all(sock, 4)
+        remaining_size = struct.unpack("!I", data)[0]
+
+        # stream the residue from the server
+        chunk_size = 4096
+        while remaining_size > 0:
+            if remaining_size > chunk_size:
+                read_size = chunk_size
+            else:
+                read_size = remaining_size
+            remaining_size -= read_size
+            stream.write(Client.recv_all(sock, read_size))
 
         # close session
         if Client.disassociate(self.ip, self.port, self.session_id) is False:

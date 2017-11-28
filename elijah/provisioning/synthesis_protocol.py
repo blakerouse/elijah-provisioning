@@ -34,6 +34,7 @@ class Protocol(object):
     MESSAGE_COMMAND_SESSION_CREATE = 0x15
     MESSAGE_COMMAND_SESSION_CLOSE = 0x16
     MESSAGE_COMMAND_HANDOFF = 0x18
+    MESSAGE_COMMAND_RESIDUE = 0x19
     # server -> client as return
     MESSAGE_COMMAND_SUCCESS = 0x01
     MESSAGE_COMMAND_FAILED = 0x02
@@ -53,6 +54,7 @@ class Protocol(object):
     KEY_SESSION_ID = "session_id"
     KEY_REQUESTED_COMMAND = "requested_command"
     KEY_OVERLAY_URL = "overlay_url"
+    KEY_RESIDUE_PATH = "residue_path"
 
     # synthesis option
     KEY_SYNTHESIS_OPTION = "synthesis_option"

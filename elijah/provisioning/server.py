@@ -162,6 +162,7 @@ class SessionResource(object):
                 LOG.info("Save VM handoff overlay at: %s" %
                         (os.path.abspath(residue_zipfile)))
             self.deallocate()
+            return residue_zipfile
 
 
 def wrap_process_fault(function):
@@ -709,11 +710,30 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         # handoff all the session resource
         msg = "Handoff resources for the Session (%s)" % session_id
         LOG.info(msg)
-        session_resource.handoff()
+        residue_zipfile = session_resource.handoff()
         del session_resources[session_id]
 
         LOG.info("  - %s" % str(pformat(message)))
-        self.ret_success(Protocol.MESSAGE_COMMAND_FINISH)
+        self.ret_success(Protocol.MESSAGE_COMMAND_HANDOFF, {
+            Protocol.KEY_RESIDUE_PATH: residue_zipfile
+        })
+
+    def _handle_residue(self, message):
+        residue_path = message.get(Protocol.KEY_RESIDUE_PATH, None)
+        remaining_size = os.path.getsize(path)
+        self.request.send(struct.pack("!I", size))
+        chunk_size = 4096
+        with open(residue_path, 'rb') as stream:
+            while remaining_size > 0:
+                if remaining_size > chunk_size:
+                    read_size = chunk_size
+                else:
+                    read_size = remaining_size
+                remaining_size -= read_size
+                self.wfile.write(stream.read(read_size))
+                self.wfile.flush()
+        os.unlink(residue_path)
+        os.unlink(os.path.dirname(residue_path))
 
     def _check_url_validity(self, message):
         requested_base = None
@@ -991,6 +1011,8 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
             elif command == Protocol.MESSAGE_COMMAND_HANDOFF:
                 if self._check_session(message):
                     self._handle_handoff(message)
+            elif command == Protocol.MESSAGE_COMMAND_RESIDUE:
+                self._handle_residue(message)
             elif command == Protocol.MESSAGE_COMMAND_SEND_OVERLAY_URL:
                 # VM provisioning with given OVERLAY URL
                 if self._check_session(message):
