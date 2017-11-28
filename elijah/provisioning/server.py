@@ -133,7 +133,7 @@ class SessionResource(object):
         preload_thread.join()
 
         # Set up temp file path for data structure and residue
-        temp_dir = mkdtemp(prefix="cloudlet-residue-")
+        temp_dir = tempfile.mkdtemp(prefix="cloudlet-residue-")
         residue_zipfile = os.path.join(temp_dir, Cloudlet_Const.OVERLAY_ZIP)
         dest_handoff_url = "file://%s" % os.path.abspath(residue_zipfile)
 
