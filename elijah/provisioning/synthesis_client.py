@@ -52,6 +52,7 @@ class Protocol(object):
     MESSAGE_COMMAND_GET_RESOURCE_INFO = 0x14
     MESSAGE_COMMAND_SESSION_CREATE = 0x15
     MESSAGE_COMMAND_SESSION_CLOSE = 0x16
+    MESSAGE_COMMAND_HANDOFF = 0x18
     # server -> client as return
     MESSAGE_COMMAND_SUCCESS = 0x01
     MESSAGE_COMMAND_FAIELD = 0x02
@@ -368,6 +369,54 @@ class Client(object):
         synthesis_end = self.time_dict['synthesis_success_time']
         client_info = {
             Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_FINISH,
+            Protocol.KEY_SESSION_ID: self.session_id,
+            'Header Transfer End at (s)': (
+                send_header_end -
+                self.start_provisioning_time),
+            'Synthesis Finishes at (s)': (
+                synthesis_end -
+                self.start_provisioning_time),
+            }
+        if self.app_function is not None:
+            self.app_thread.join()
+            self.time_dict.update(self.app_thread.time_dict)
+            app_start = self.time_dict.get('app_start', None)
+            app_end = self.time_dict.get('app_end', None)
+            client_info.update({
+                'App Start at (s)': (app_start-self.start_provisioning_time),
+                'App End at (s)': (app_end-self.start_provisioning_time)
+                })
+        pprint(client_info)
+
+        # send close signal to cloudlet server
+        sock = Client.connect(self.ip, self.port)
+        if not sock:
+            msg = "Cannot connect to Cloudlet (%s:%d)\n" % (self.ip, self.port)
+            sys.stderr.write(msg)
+            raise ClientError(msg)
+        header = Client.encoding(client_info)
+        sock.sendall(struct.pack("!I", len(header)))
+        sock.sendall(header)
+
+        # recv finish success (as well as residue) from server
+        data = Client.recv_all(sock, 4)
+        msg_size = struct.unpack("!I", data)[0]
+        msg_data = Client.recv_all(sock, msg_size)
+        message = Client.decoding(msg_data)
+        command = message.get(Protocol.KEY_COMMAND)
+        if command != Protocol.MESSAGE_COMMAND_SUCCESS:
+            raise ClientError("finish success error: %d" % command)
+
+        # close session
+        if Client.disassociate(self.ip, self.port, self.session_id) is False:
+            print "Failed to close session"
+
+    def handoff(self):
+        # printout measurement
+        send_header_end = self.time_dict['send_header_end_time']
+        synthesis_end = self.time_dict['synthesis_success_time']
+        client_info = {
+            Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_HANDOFF,
             Protocol.KEY_SESSION_ID: self.session_id,
             'Header Transfer End at (s)': (
                 send_header_end -
