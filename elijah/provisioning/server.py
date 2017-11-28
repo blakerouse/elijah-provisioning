@@ -116,7 +116,9 @@ class SessionResource(object):
 
     def handoff(self):
         meta_info = self.resource_dict[SessionResource.META_INFO]
-        print(meta_info)
+        print("META_INFO")
+        import pprint
+        pprint.pprint(meta_info)
 
 
 def wrap_process_fault(function):
