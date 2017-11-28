@@ -723,7 +723,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         remaining_size = os.path.getsize(residue_path)
         LOG.info("Handoff residue request for %s (size: %d)" % (
             residue_path, remaining_size))
-        self.request.send(struct.pack("!I", size))
+        self.request.send(struct.pack("!I", remaining_size))
         chunk_size = 4096
         with open(residue_path, 'rb') as stream:
             while remaining_size > 0:
