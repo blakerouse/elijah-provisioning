@@ -296,10 +296,11 @@ def start_migration(user_app):
     user_app['migrate_thread'] = thread
 
 
-def wait_for_migration(migrate):
+def wait_for_migration(migrate, user_id, app_id):
     """Wait for the migration to be complete so the residue can be pulled."""
     while True:
-        migrate_response = urllib2.urlopen(migrate)
+        migrate_response = urllib2.urlopen(
+            migrate + "?user_id=%s&app_id=%s" % (user_id, app_id))
         if migrate_response.getcode() != 200:
             app.logger.error(
                 "failed to request migration information from "
@@ -333,7 +334,8 @@ def index():
                 "requesting migration information from "
                 "'%s' for app '%s' user '%s'",
                 migrate, app_id, user_id)
-            migrate_response = urllib2.urlopen(migrate)
+            migrate_response = urllib2.urlopen(
+                migrate + "?user_id=%s&app_id=%s" % (user_id, app_id))
             if migrate_response.getcode() != 200:
                 app.logger.error(
                     "failed to request migration information from "
@@ -374,13 +376,14 @@ def index():
         # If this is a migration we need to wait until the migration is ready
         # to get the residue from the other gateway.
         if migrate is not None:
-            wait_for_migration(migrate)
+            wait_for_migration(migrate, user_id, app_id)
         # Determine if a file was provided on the request to create.
         overlay_path = os.path.join(
             app.config['OVERLAYS_PATH'], '%s_%s.overlay' % (
                 user_id, app_id))
         if migrate is not None:
-            overlay_response = urllib2.urlopen(migrate + '/residue')
+            overlay_response = urllib2.urlopen(
+                migrate + '/residue?user_id=%s&app_id=%s' % (user_id, app_id))
             with open(overlay_path, 'wb') as stream:
                 while True:
                     chunk = overlay_response.read(16 * 1024)
@@ -533,6 +536,9 @@ def migrate_residue():
                 if not buf:
                     os.unlink(residue_path)
                     os.rmdir(os.path.dirname(residue_path))
+                    atomic_network_release(user_id, app_id)
+                    if get_user_network(user_id) is None:
+                        stop_network(network)
                     break
                 yield buf
     return Response(chunk_response(), mimetype='application/octet-stream')
