@@ -329,6 +329,10 @@ def index():
                 migrate += 'migrate'
             else:
                 migrate += '/migrate'
+            app.logger.info(
+                "requesting migration information from "
+                "'%s' for app '%s' user '%s'",
+                migrate, app_id, user_id)
             migrate_response = urllib2.urlopen(migrate)
             if migrate_response.getcode() != 200:
                 app.logger.error(
