@@ -402,7 +402,7 @@ def index():
             app.logger.info(
                 "failed migrating app '%s' for user '%s' because user already "
                 "has a network assigned that will not match the required "
-                "migration information for the migrating application"
+                "migration information for the migrating application",
                 app_id, user_id)
             abort(400)
         if migrate_app_info:
