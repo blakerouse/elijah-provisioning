@@ -63,7 +63,7 @@ class SessionResource(object):
     OVERLAY_DIR     = "overlay_dir"
     OVERLAY_DB_ENTRY    = "overlay_db_entry"
     BASE_PATH = "base_path"
-    BASE_HASH = "base_path"
+    BASE_HASH = "base_hash"
 
     def __init__(self, session_id):
         self.session_id = session_id
@@ -124,7 +124,7 @@ class SessionResource(object):
         base_hash = self.resource_dict[SessionResource.BASE_HASH]
         (base_diskmeta, base_mem, base_memmeta) = \
                 Cloudlet_Const.get_basepath(base_path, check_exist=True)
-        base_vm_paths = [base_disk, base_mem, base_diskmeta, base_memmeta]
+        base_vm_paths = [base_path, base_mem, base_diskmeta, base_memmeta]
 
         # Preload basevm hash dictionary for creating the residue.
         preload_thread = handoff.PreloadResidueData(
@@ -660,6 +660,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
         s_resource.add(SessionResource.BASE_PATH, base_path)
+        s_resource.add(
+            SessionResource.BASE_HASH,
+            meta_info.get(Cloudlet_Const.META_BASE_VM_SHA256, None))
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
@@ -881,6 +884,9 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
         s_resource.add(SessionResource.OVERLAY_DIR, self.tmp_overlay_dir)
         s_resource.add(SessionResource.OVERLAY_DB_ENTRY, new_overlayvm)
         s_resource.add(SessionResource.BASE_PATH, base_path)
+        s_resource.add(
+            SessionResource.BASE_HASH,
+            meta_info.get(Cloudlet_Const.META_BASE_VM_SHA256, None))
         session_resources[session_id] = s_resource
         LOG.info("Resource is allocated for Session: %s" % str(session_id))
 
