@@ -227,13 +227,16 @@ class VM_Overlay(native_threading.Thread):
         # resume & get modified disk
         LOG.info("* Overlay creation configuration")
         LOG.info("  - %s" % str(self.options))
-        self.old_xml_str, self.new_xml_str = _convert_xml(
+        self.old_xml_str, self.new_xml_str, nic_connected = _convert_xml(
             self.modified_disk, mem_snapshot=self.base_mem_fuse,
             qemu_logfile=self.qemu_logfile, qemu_args=self.qemu_args,
             nova_xml=self.nova_xml)
+        kwargs = {}
+        if not nic_connected:
+            kwargs['interface_xml'] = self.interface_xml
         self.machine = run_snapshot(self.conn, self.modified_disk,
                                     self.base_mem_fuse, self.new_xml_str,
-                                    interface_xml=self.interface_xml)
+                                    **kwargs)
         return self.machine
 
     @wrap_vm_fault
@@ -414,22 +417,26 @@ class SynthesizedVM(native_threading.Thread):
         # convert xml
         if self.disk_only:
             xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
-            self.old_xml_str, self.new_xml_str = _convert_xml(
-                self.resumed_disk,
-                xml=xml,
-                qemu_logfile=self.qemu_logfile,
-                qemu_args=self.qemu_args,
-            )
+            self.old_xml_str, self.new_xml_str, self.nic_connected = (
+                _convert_xml(
+                    self.resumed_disk,
+                    xml=xml,
+                    qemu_logfile=self.qemu_logfile,
+                    qemu_args=self.qemu_args,
+                    interface=self.interface,
+                ))
         else:
-            self.old_xml_str, self.new_xml_str = _convert_xml(
-                self.resumed_disk,
-                mem_snapshot=self.resumed_mem,
-                qemu_logfile=self.qemu_logfile,
-                qmp_channel=self.qmp_channel,
-                qemu_args=self.qemu_args,
-                nova_xml=self.nova_xml,
-                memory_snapshot_mode="live",
-            )
+            self.old_xml_str, self.new_xml_str, self.nic_connected = (
+                _convert_xml(
+                    self.resumed_disk,
+                    mem_snapshot=self.resumed_mem,
+                    qemu_logfile=self.qemu_logfile,
+                    qmp_channel=self.qmp_channel,
+                    qemu_args=self.qemu_args,
+                    nova_xml=self.nova_xml,
+                    memory_snapshot_mode="live",
+                    interface=self.interface,
+                ))
 
     def resume(self):
         # resume VM
@@ -438,13 +445,17 @@ class SynthesizedVM(native_threading.Thread):
         try:
             if self.disk_only:
                 # edit default XML to have new disk path
+                kwargs = {
+                    'vnc_disable': True,
+                }
+                if not self.nic_connected:
+                    kwargs['interface'] = self.interface
+                    kwargs['interface_mac'] = self.interface_mac
                 self.machine = run_vm(
-                    self.conn, self.new_xml_string,
-                    interface=self.interface, interface_mac=self.interface_mac,
-                    vnc_disable=True)
+                    self.conn, self.new_xml_string, **kwargs)
             else:
                 interface_xml = None
-                if self.interface:
+                if self.interface and not self.nic_connected:
                     interface_xml = create_interface_xml(
                         self.interface, mac=self.interface_mac)
                 self.machine = run_snapshot(self.conn, self.resumed_disk,
@@ -584,19 +595,17 @@ def random_mac():
 
 
 def _connect_interface(device_element, interface):
-    interface = device_element.find("interface")
-    if interface:
+    network_element = device_element.find("interface")
+    if network_element:
         if network_element.get("type") != "bridge":
-            raise ValueError(
-                "existing VM network was not a bridge, it was %s" % (
-                    network_element.get("type")))
+            return False
         source = network_element.find("source")
         if source is None:
             source = Element("source")
             network_element.append(source)
         source.set("bridge", interface)
-    else:
-        raise ValueError("no interface exists for the VM")
+        return True
+    return False
 
 
 def _convert_xml(disk_path, xml=None, mem_snapshot=None,
@@ -773,11 +782,13 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None,
     for serial_element in serial_elements:
         device_element.remove(serial_element)
 
-    # map the interface to passed interface
+    # map the interface to passed interface if interface already exists
+    # in the XML.
+    remove_interfaces = True
     if interface:
-        _connect_network(device_element, interface)
-    else:
-        # no interface so remove all interface
+        if _connect_interface(device_element, interface):
+            remove_interfaces = False
+    if remove_interfaces:
         for network_element in device_element.findall("interface"):
             if network_element is not None:
                 device_element.remove(network_element)
@@ -797,7 +808,7 @@ def _convert_xml(disk_path, xml=None, mem_snapshot=None,
     if mem_snapshot is not None:
         overwrite_xml(mem_snapshot, new_xml_str)
 
-    return original_xml_backup, new_xml_str
+    return original_xml_backup, new_xml_str, not remove_interfaces
 
 
 def _get_overlay_monitoring_info(conn, machine, options,
@@ -1690,14 +1701,19 @@ def create_baseVM(disk_image_path, interface=None, interface_mac=None):
     # edit default XML to have new disk path
     conn = get_libvirt_connection()
     xml = ElementTree.fromstring(open(Const.TEMPLATE_XML, "r").read())
-    xml, new_xml_string = _convert_xml(disk_path=disk_image_path, xml=xml)
+    xml, new_xml_string, nic_connected = _convert_xml(
+        disk_path=disk_image_path, xml=xml)
 
     # launch VM & wait for end of vnc
     machine = None
+    kwargs = {
+        'wait_vnc': True
+    }
+    if not nic_connected:
+        kwargs['interface'] = interface
+        kwargs['interface_mac'] = interface_mac
     try:
-        machine = run_vm(
-            conn, new_xml_string,
-            interface=interface, interface_mac=interface_mac, wait_vnc=True)
+        machine = run_vm(conn, new_xml_string, **kwargs)
         base_hashvalue = _create_baseVM(conn,
                                         machine,
                                         disk_image_path,
