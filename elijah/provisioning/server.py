@@ -720,7 +720,7 @@ class SynthesisHandler(SocketServer.StreamRequestHandler):
 
     def _handle_residue(self, message):
         residue_path = message.get(Protocol.KEY_RESIDUE_PATH, None)
-        remaining_size = os.path.getsize(path)
+        remaining_size = os.path.getsize(residue_path)
         LOG.info("Handoff residue request for %s (size: %d)" % (
             residue_path, remaining_size))
         self.request.send(struct.pack("!I", size))
