@@ -463,9 +463,9 @@ class Client(object):
             Protocol.KEY_COMMAND: Protocol.MESSAGE_COMMAND_RESIDUE,
             Protocol.KEY_RESIDUE_PATH: residue_path,
         }
-        header = Client.encoding(client_info)
-        sock.sendall(struct.pack("!I", len(header)))
-        sock.sendall(header)
+        residue_header = Client.encoding(residue_request)
+        sock.sendall(struct.pack("!I", len(residue_header)))
+        sock.sendall(residue_header)
 
         # recv the size of the residue
         data = Client.recv_all(sock, 4)
