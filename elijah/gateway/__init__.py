@@ -254,7 +254,8 @@ def write_leases(network, leases):
     """Write the entire leases file."""
     config = app.config['CLOUDLET_CONFIG']
     net_info = config['networks'][network]
-    os.makedirs('/var/lib/cloudlet/dnsmasq')
+    if not os.path.exists('/var/lib/cloudlet/dnsmasq'):
+        os.makedirs('/var/lib/cloudlet/dnsmasq')
     leases_path = os.path.join(
         '/var/lib/cloudlet/dnsmasq/vlan-%d.leases' % net_info['vid'])
     with open(leases_path, 'w') as stream:
