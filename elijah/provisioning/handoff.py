@@ -903,7 +903,7 @@ def perform_handoff(handoff_data):
         VMOverlayCreationMode.LIVE_MIGRATION_STOP = VMOverlayCreationMode.LIVE_MIGRATION_FINISH_USE_SNAPSHOT_SIZE
         overlay_mode = VMOverlayCreationMode.get_pipelined_multi_process_finite_queue(
             num_cores=NUM_CPU_CORES)
-        overlay_mode.COMPRESSION_ALGORITHM_TYPE = Const.COMPRESSION_GZIP
+        overlay_mode.COMPRESSION_ALGORITHM_TYPE = Const.COMPRESSION_LZMA
         overlay_mode.COMPRESSION_ALGORITHM_SPEED = 1
         overlay_mode.MEMORY_DIFF_ALGORITHM = "none"
         overlay_mode.DISK_DIFF_ALGORITHM = "none"
