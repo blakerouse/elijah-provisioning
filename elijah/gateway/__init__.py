@@ -533,17 +533,20 @@ def migrate_residue():
     if not os.path.exists(residue_path):
         abort(400)
     def chunk_response():
-        with open(residue_path, 'wb') as stream:
+        with open(residue_path, 'rb') as stream:
             while True:
                 buf = stream.read(4096)
                 if not buf:
-                    os.unlink(residue_path)
-                    os.rmdir(os.path.dirname(residue_path))
-                    atomic_network_release(user_id, app_id)
-                    if get_user_network(user_id) is None:
-                        stop_network(network)
                     break
                 yield buf
+
+        # This application is now completely gone from this gateway. Remove the
+        # residue and bring the network down if needed.
+        os.unlink(residue_path)
+        os.rmdir(os.path.dirname(residue_path))
+        atomic_network_release(user_id, app_id)
+        if get_user_network(user_id) is None:
+            stop_network(network)
     return Response(chunk_response(), mimetype='application/octet-stream')
 
 
