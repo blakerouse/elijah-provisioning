@@ -176,7 +176,7 @@ def wrap_process_fault(function):
             return function(self, *args, **kwargs)
         except Exception, e:
             if hasattr(self, 'exception_handler'):
-                self.exception_handler()
+                self.exception_handler(e)
             kwargs.update(dict(zip(function.func_code.co_varnames[2:], args)))
             LOG.error("failed with : %s" % str(kwargs))
 
@@ -215,7 +215,7 @@ class NetworkStepThread(threading.Thread):
         self.chunk_size = chunk_size
         threading.Thread.__init__(self, target=self.receive_overlay_blobs)
 
-    def exception_handler(self):
+    def exception_handler(self, exc):
         self.out_queue.put(Synthesis_Const.ERROR_OCCURED)
         self.time_queue.put({'start_time':-1, 'end_time':-1, "bw_mbps":0})
 
@@ -331,8 +331,8 @@ class DecompStepProc(Process):
         self.temp_overlay_file = temp_overlay_file
         Process.__init__(self, target=self.decompress_blobs)
 
-    def exception_handler(self):
-        LOG.error("decompress step error")
+    def exception_handler(self, exc):
+        LOG.error("decompress step error: %s" % str(exc))
 
     @wrap_process_fault
     def decompress_blobs(self):
@@ -384,7 +384,7 @@ class URLFetchStep(threading.Thread):
         self.chunk_size = chunk_size
         threading.Thread.__init__(self, target=self.receive_overlay_blobs)
 
-    def exception_handler(self):
+    def exception_handler(self, exc):
         self.out_queue.put(Synthesis_Const.ERROR_OCCURED)
         self.time_queue.put({'start_time':-1, 'end_time':-1, "bw_mbps":0})
 
