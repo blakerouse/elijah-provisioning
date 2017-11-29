@@ -380,17 +380,18 @@ def index():
             wait_for_migration(migrate, user_id, app_id)
         # Determine if a file was provided on the request to create.
         overlay_path = os.path.join(
-            app.config['OVERLAYS_PATH'], '%s_%s.overlay' % (
+            app.config['OVERLAYS_PATH'], '%s_%s.zip' % (
                 user_id, app_id))
         if migrate is not None:
             overlay_response = urllib2.urlopen(
                 migrate + '/residue?user_id=%s&app_id=%s' % (user_id, app_id))
             with open(overlay_path, 'wb') as stream:
                 while True:
-                    chunk = overlay_response.read(16 * 1024)
+                    chunk = overlay_response.read(4096)
                     if not chunk:
                         break
                     stream.write(chunk)
+                    stream.flush()
         elif request.files.get('overlay'):
             overlay_file = request.files.get('overlay')
             overlay_file.save(overlay_path)
@@ -399,10 +400,11 @@ def index():
             overlay_response = urllib2.urlopen(overlay_url)
             with open(overlay_path, 'wb') as stream:
                 while True:
-                    chunk = overlay_response.read(16 * 1024)
+                    chunk = overlay_response.read(4096)
                     if not chunk:
                         break
                     stream.write(chunk)
+                    stream.flush()
         else:
             abort(400)
         net_started = start_network(network)
