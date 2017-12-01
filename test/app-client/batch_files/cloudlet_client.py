@@ -208,7 +208,9 @@ def get_app_cmd(app_name):
 def exec_application(cmd):
     print "Run client : %s" % (cmd)
     while True:
-        proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        proc = subprocess.Popen(
+            cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            close_fds=True)
         while True:
             output = proc.stdout.readline()
             if len(output) == 0:

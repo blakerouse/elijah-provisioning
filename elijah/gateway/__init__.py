@@ -188,7 +188,7 @@ def start_network(network):
         env['TENANT_NETWORK_ID'] = str(migration['vid'])
     process = Popen(
         ['cloudlet-add-vlan', str(net_info['interface']), str(net_info['vid'])],
-        env=env)
+        env=env, close_fds=True)
     if process.wait() != 0:
         raise CalledProcessError(process.returncode, 'cloudlet-add-vlan')
     network['open'] = True
@@ -210,7 +210,7 @@ def stop_network(network):
         env['CLOUDLET_VPN_PORT_OFFSET'] = port_offset
     process = Popen(
         ['cloudlet-delete-vlan', str(net_info['vid'])],
-        env=env)
+        env=env, close_fds=True)
     if process.wait() != 0:
         raise CalledProcessError(process.returncode, 'cloudlet-delete-vlan')
     del network['open']

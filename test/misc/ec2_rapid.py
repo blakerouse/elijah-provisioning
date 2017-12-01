@@ -134,7 +134,7 @@ def mount_launchVM(fuse):
 
     # mount
     cmd_mapping = "sudo kpartx -av %s" % (fuse_image)
-    proc = subprocess.Popen(cmd_mapping, shell=True, stdin=sys.stdin, stdout=subprocess.PIPE)
+    proc = subprocess.Popen(cmd_mapping, shell=True, stdin=sys.stdin, stdout=subprocess.PIPE, close_fds=True)
     proc.wait()
     if proc.returncode != 0:
         print >> sys.stderr, "Error, Failed to kpartx"
@@ -143,7 +143,7 @@ def mount_launchVM(fuse):
     output = output[output.find("loop"):]
     mapper_dev = output.split(" ")[0].strip()
     cmd_mount = "sudo mount /dev/mapper/%s %s" % (mapper_dev, mount_dir)
-    proc = subprocess.Popen(cmd_mount, shell=True, stdin=sys.stdin, stdout=sys.stdout)
+    proc = subprocess.Popen(cmd_mount, shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True)
     proc.wait()
     if proc.returncode != 0:
         print >> sys.stderr, "Error, Failed to mount, ret code : " + str(proc.returncode)
@@ -159,12 +159,12 @@ def rsync_overlayVM(vm_dir, instance_dir):
 
     # restart init process because it might inidicate original init process
     print "[INFO] Restart Init processs"
-    subprocess.Popen("sudo telinit u", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo telinit u", shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
 
     # possible mount residue at origianl block
     new_mount_dir = os.path.join(instance_dir, "mnt")
     print "[INFO] Remove possible mountings at : " + new_mount_dir
-    subprocess.Popen("sudo umount %s" % (new_mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo umount %s" % (new_mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
 
     # erase instance dir
     '''
@@ -186,17 +186,17 @@ def rsync_overlayVM(vm_dir, instance_dir):
     print "[INFO] rsync from %s to %s" % (vm_dir, instance_dir)
     start_time = datetime.now()
     cmd_rsync = "sudo rsync -aHx --delete %s/ %s/" % (vm_dir, instance_dir)
-    subprocess.Popen(cmd_rsync, shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
-    subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen(cmd_rsync, shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
+    subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
     rsync_time = datetime.now()-start_time
     print "[TIME] rsync time : %s" % (str(rsync_time))
 
     # umount
     print "[INFO] umount instance dir, %s" % (instance_dir)
-    subprocess.Popen("sudo umount %s" % (instance_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo umount %s" % (instance_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
     print "[INFO] umount VM dir, %s" % (vm_dir)
-    subprocess.Popen("sudo umount %s" % (vm_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
-    subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+    subprocess.Popen("sudo umount %s" % (vm_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
+    subprocess.Popen("sudo sync", shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
 
 
 def clean_up(fuse, mount_dir, raw_vm):
@@ -208,10 +208,10 @@ def clean_up(fuse, mount_dir, raw_vm):
     print "[INFO] clean up temp dir : %s" % (os.path.abspath(mount_dir))
     if os.path.exists(mount_dir):
         print "[INFO] umount VM dir, %s" % (mount_dir)
-        subprocess.Popen("sudo umount %s" % (mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+        subprocess.Popen("sudo umount %s" % (mount_dir), shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
     if os.path.exists(fuse.mountpoint):
         print "[INFO] umount FUSE dir, %s" % (mount_dir)
-        subprocess.Popen("sudo umount %s" % (fuse.mountpoint), shell=True, stdin=sys.stdin, stdout=sys.stdout).wait()
+        subprocess.Popen("sudo umount %s" % (fuse.mountpoint), shell=True, stdin=sys.stdin, stdout=sys.stdout, close_fds=True).wait()
 
 
 def process_command_line(argv):

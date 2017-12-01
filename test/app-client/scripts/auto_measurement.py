@@ -59,7 +59,7 @@ def run_application(cloud_ip, cloud_port, server_cmd, watts_ip, client_cmd, powe
     ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(command)
 
     # Start Client App
-    proc = subprocess.Popen(client_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    proc = subprocess.Popen(client_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, close_fds=True)
     start_time = datetime.now()
     power_sum = 0.0
     power_counter = 0
