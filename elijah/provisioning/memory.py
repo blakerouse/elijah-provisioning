@@ -778,7 +778,7 @@ class CreateMemoryDeltalist(process_manager.ProcWorker):
             input_list.append(fileno)
             finished_proc_dict[fileno] = c_queue
         while len(finished_proc_dict.keys()) > 0:
-            (input_ready, [], []) = select.select(input_list, [], [], 0.01)
+            (input_ready, _, _) = select.select(input_list, [], [], 0.01)
             for in_queue in input_ready:
                 if self.control_queue._reader.fileno() == in_queue:
                     control_msg = self.control_queue.get()

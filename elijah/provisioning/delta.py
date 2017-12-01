@@ -879,7 +879,7 @@ class DeltaDedup(process_manager.ProcWorker):
                 input_list = [self.memory_deltalist_queue._reader.fileno(),
                             self.disk_deltalist_queue._reader.fileno(),
                             self.control_queue._reader.fileno()]
-                (input_ready, [], []) = select.select(input_list, [], [])
+                (input_ready, _, _) = select.select(input_list, [], [])
                 if self.control_queue._reader.fileno() in input_ready:
                     control_msg = self.control_queue.get()
                     self._handle_control_msg(control_msg)
