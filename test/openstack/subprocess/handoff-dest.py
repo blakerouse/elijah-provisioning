@@ -6,6 +6,7 @@ import subprocess
 import sys
 import select
 import StringIO
+import errno
 
 sys.path.insert(0, "../../../")
 from elijah.provisioning import synthesis
