@@ -207,7 +207,7 @@ def stop_network(network):
     port_offset = config.get('vpn', {}).get('port_offset')
     env = os.environ.copy()
     if port_offset:
-        env['CLOUDLET_VPN_PORT_OFFSET'] = port_offset
+        env['CLOUDLET_VPN_PORT_OFFSET'] = str(port_offset)
     process = Popen(
         ['cloudlet-delete-vlan', str(net_info['vid'])],
         env=env, close_fds=True)
