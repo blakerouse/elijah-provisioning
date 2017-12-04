@@ -83,7 +83,7 @@ for VID in $VIDS; do
     ip link set dev $TENANT_IFNAME up
     $NETNS_RUN ip link set dev $VETH_IFNAME up
     ip link set dev br-vlan$VID up
-    $NETNS_RUN ip route add default via 100.65.$VID.1
+    $NETNS_RUN ip route add default via 100.65.$VID.1 src 100.64.$TENANT_NETWORK_ID.1
     # Rules to allow traffic from the VMs to access the internet.
     $NETNS_RUN iptables --table nat --append POSTROUTING --out-interface $VETH_IFNAME --source 100.64.$TENANT_NETWORK_ID.0/24 --jump SNAT --to-source 100.65.$VID.2
     iptables --table nat --insert POSTROUTING --source 100.65.$VID.2 -j MASQUERADE

@@ -54,6 +54,7 @@ if [ "$MODE" = "client" ]; then
     echo "route 100.64.$TENANT_NETWORK_ID.0 255.255.255.0"
 else
     # Configuration specific to the server.
+    echo "local 100.65.$VID.2"
     echo "ifconfig 100.65.$VID.4 100.65.$VID.5"
     echo "push \"route 100.64.$TENANT_NETWORK_ID.0 255.255.255.0\""
     echo "writepid $VPN_STATE_DIR/tenant$VID.pid"
